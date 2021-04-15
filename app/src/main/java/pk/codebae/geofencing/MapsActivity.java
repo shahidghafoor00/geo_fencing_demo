@@ -7,12 +7,17 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.FragmentActivity;
 
 import android.Manifest;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
 
+import com.google.android.gms.location.Geofence;
+import com.google.android.gms.location.GeofencingClient;
+import com.google.android.gms.location.GeofencingRequest;
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -20,6 +25,8 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.CircleOptions;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.tasks.OnFailureListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, GoogleMap.OnMapLongClickListener {
 
@@ -27,6 +34,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     private static final int LOCATION_REQUEST_CODE = 100;
     private GoogleMap mMap;
+    private GeofencingClient geofencingClient;
+    private GeofenceHelper geofenceHelper;
+    private String geofenceId = "my_geofence_id";
+
+
 
 
     @Override
@@ -37,6 +49,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+        geofencingClient = LocationServices.getGeofencingClient(this);
+        geofenceHelper = new GeofenceHelper(this);
     }
 
     /**
@@ -72,7 +86,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 // why your app needs this permission
             } else {
                 // ask permission
-                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_BACKGROUND_LOCATION},
                         LOCATION_REQUEST_CODE);
             }
         }
@@ -91,8 +105,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     @Override
     public void onMapLongClick(LatLng latLng) {
+        mMap.clear();
         addMark(latLng);
         addRadius(latLng, GEO_FENCE_RADIUS);
+        addGeofence(latLng, GEO_FENCE_RADIUS);
     }
 
     private void addMark(LatLng latLng) {
@@ -109,5 +125,27 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         circleOptions.fillColor(Color.argb(64, 255, 0, 0));
         circleOptions.strokeWidth(4);
         mMap.addCircle(circleOptions);
+    }
+
+
+    private void addGeofence(LatLng latLng, float radius) {
+        Geofence geofence = geofenceHelper.getGeofence(geofenceId, latLng, GEO_FENCE_RADIUS,
+                Geofence.GEOFENCE_TRANSITION_ENTER |
+                        Geofence.GEOFENCE_TRANSITION_DWELL |
+                        Geofence.GEOFENCE_TRANSITION_EXIT);
+        GeofencingRequest geofencingRequest = geofenceHelper.geofencingRequest(geofence);
+        PendingIntent pendingIntent = geofenceHelper.getPendingIntent();
+        geofencingClient.addGeofences(geofencingRequest, pendingIntent).addOnSuccessListener(new OnSuccessListener<Void>() {
+            @Override
+            public void onSuccess(Void aVoid) {
+                Log.wtf("onSuccess", "Geofence Added");
+            }
+        }).addOnFailureListener(new OnFailureListener() {
+            @Override
+            public void onFailure(@NonNull Exception e) {
+                String errorMsg = geofenceHelper.getErrorString(e);
+                Log.wtf("OnFailure---------------", errorMsg);
+            }
+        });
     }
 }
